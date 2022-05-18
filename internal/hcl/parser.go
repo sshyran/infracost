@@ -131,6 +131,12 @@ func OptionWithRemoteVarLoader(host, token, localWorkspace string) Option {
 	}
 }
 
+func OptionWithCredentialsSource(findTokenForHost modules.FindTokenForHost) Option {
+	return func(p *Parser) {
+		p.credentialsSource = modules.NewCredentialsSource(findTokenForHost)
+	}
+}
+
 func OptionWithWorkspaceName(workspaceName string) Option {
 	return func(p *Parser) {
 		p.workspaceName = workspaceName
@@ -175,6 +181,7 @@ type Parser struct {
 	newSpinner            ui.SpinnerFunc
 	writeWarning          ui.WriteWarningFunc
 	remoteVariablesLoader *RemoteVariablesLoader
+	credentialsSource     *modules.CredentialsSource
 }
 
 // New creates a new Parser with the provided options, it inits the workspace as under the default name
@@ -216,6 +223,7 @@ func New(initialPath string, options ...Option) *Parser {
 	if p.newSpinner != nil {
 		loaderOpts = append(loaderOpts, modules.LoaderWithSpinner(p.newSpinner))
 	}
+	loaderOpts = append(loaderOpts, modules.LoaderWithCredentialsSource(p.credentialsSource))
 
 	p.moduleLoader = modules.NewModuleLoader(initialPath, loaderOpts...)
 	return p

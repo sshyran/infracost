@@ -114,6 +114,20 @@ func NewHCLProvider(ctx *config.ProjectContext, provider *PlanJSONProvider, opts
 		options = append(options, hcl.OptionWithRemoteVarLoader(host, token, localWorkspace))
 	}
 
+	findTokenForHost := func(host string) (string, error) {
+		defaultHost, defaultToken, err := findRemoteHostAndToken(ctx)
+		if err != nil {
+			return "", err
+		}
+
+		if host == defaultHost {
+			return defaultToken, nil
+		}
+
+		return findCloudToken(host), nil
+	}
+	options = append(options, hcl.OptionWithCredentialsSource(findTokenForHost))
+
 	p := hcl.New(ctx.ProjectConfig.Path, options...)
 
 	return &HCLProvider{
