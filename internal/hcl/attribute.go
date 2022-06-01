@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
@@ -64,6 +65,37 @@ func (attr *Attribute) Value() (ctyVal cty.Value) {
 	var diag hcl.Diagnostics
 	ctyVal, diag = attr.HCLAttr.Expr.Value(attr.Ctx.Inner())
 	if diag.HasErrors() {
+		for _, d := range diag {
+			if d.Summary == "Unsupported attribute" {
+				vars := attr.HCLAttr.Expr.Variables()
+				for _, traversal := range vars {
+					v, diags := traversal.TraverseAbs(attr.Ctx.Inner())
+					name := traversal.RootName()
+					var attrName string
+					for _, traverser := range traversal {
+						if v, ok := traverser.(hcl.TraverseAttr); ok {
+							attrName = v.Name
+							break
+						}
+					}
+
+					if attrName != "" {
+						vs := attr.Ctx.Inner().Parent().Variables
+						v := vs[name]
+						// if v is a nil map we need to generate a blanks object here
+						newobj := v.AsValueMap()
+						newobj[attrName] = cty.StringVal(uuid.NewString())
+						vs[name] = cty.ObjectVal(newobj)
+
+						return attr.Value()
+					}
+					log.Println(name, v, diags)
+				}
+				log.Println(vars)
+				return cty.StringVal(uuid.NewString())
+			}
+		}
+
 		if attr.Verbose {
 			log.Debugf("error diagnostic return from evaluating %s err: %s", attr.HCLAttr.Name, diag.Error())
 		}

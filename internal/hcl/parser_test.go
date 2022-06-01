@@ -102,6 +102,65 @@ data "cats_cat" "the-cats-mother" {
 	assert.Equal(t, "boots", dataBlocks[0].GetAttribute("name").Value().AsString())
 }
 
+func Test_UnsupportedAttributes(t *testing.T) {
+	path := createTestFile("test.tf", `
+
+resource "with_unsupported_attr" "test" {
+	name = "mittens"
+	special = true
+}
+
+resource "with_unsupported_attr" "test2" {
+	name = "mittens"
+	special = true
+}
+
+locals {
+	value = with_unsupported_attr.does_not_exist
+	names = ["test", "test2"]
+}
+
+output "exp" {
+  value = {
+    for name in local.names :
+      name => with_unsupported_attr.does_not_exist
+  }
+}
+
+output "loadbalancer"  {
+    value = {
+		"${var.env_dnsname}-${var.app_dnsname}" : google_compute_forwarding_rule.default.ip_address
+    }
+}
+`)
+
+	parser := newParser(filepath.Dir(path))
+	module, err := parser.ParseDirectory()
+	require.NoError(t, err)
+
+	blocks := module.Blocks
+
+	label := blocks.Matching(BlockMatcher{Type: "locals"})
+	require.NotNil(t, label)
+	mockedVal := label.GetAttribute("value").Value()
+	require.Equal(t, cty.String, mockedVal.Type())
+	assert.NotEmpty(t, mockedVal.AsString())
+
+	output := blocks.Matching(BlockMatcher{Label: "exp", Type: "output"})
+	require.NotNil(t, output)
+	mockedObj := output.GetAttribute("value").Value()
+	require.True(t, mockedObj.Type().IsObjectType())
+
+	vm := mockedObj.AsValueMap()
+	assert.Len(t, vm, 2)
+	assert.Equal(t, mockedVal, vm["test"])
+	assert.Equal(t, mockedVal, vm["test2"])
+
+	output2 := blocks.Matching(BlockMatcher{Label: "loadbalancer", Type: "output"})
+	objectWithKeys := output2.GetAttribute("value").Value()
+	log.Println(objectWithKeys)
+}
+
 func Test_Modules(t *testing.T) {
 
 	path := createTestFileWithModule(`
